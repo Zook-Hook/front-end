@@ -1,13 +1,36 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createPublicClient, http } from "viem";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { injected } from "wagmi/connectors";
+import { worldchain } from "./providers";
 
 function priceToTick(p: number) {
   // placeholder v3 conversion
   return Math.floor(Math.log(p) / Math.log(1.0001));
 }
+
+const POOL_ADDRESS = "0x132db01ffd6a7d8446666c5fa5689a9556a384bdaa6bf68aecce7949efba649c" as const;
+const POOL_MANAGER_ADDRESS = "0xb1860D529182ac3BC1F51Fa2ABd56662b7D13f33" as const;
+
+const poolAbi = [
+  {
+    inputs: [],
+    name: "slot0",
+    outputs: [
+      { internalType: "uint160", name: "sqrtPriceX96", type: "uint160" },
+      { internalType: "int24", name: "tick", type: "int24" },
+      { internalType: "uint16", name: "observationIndex", type: "uint16" },
+      { internalType: "uint16", name: "observationCardinality", type: "uint16" },
+      { internalType: "uint16", name: "observationCardinalityNext", type: "uint16" },
+      { internalType: "uint8", name: "feeProtocol", type: "uint8" },
+      { internalType: "bool", name: "unlocked", type: "bool" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+] as const;
 
 export default function Home() {
   const [selectedRange, setSelectedRange] = useState<"A" | "B" | "C">("B");
@@ -16,8 +39,16 @@ export default function Home() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [price, setPrice] = useState(2.5); // 1 WLD = 2.5 USDC (mock)
+  const [price, setPrice] = useState(2.5); // default until fetched from pool
   const [lastEdited, setLastEdited] = useState<"WLD" | "USDC">("WLD");
+  const publicClient = useMemo(
+    () =>
+      createPublicClient({
+        chain: worldchain,
+        transport: http(worldchain.rpcUrls.default.http[0]),
+      }),
+    []
+  );
   const { address, isConnected } = useAccount();
   const { connectAsync } = useConnect();
   const { disconnectAsync } = useDisconnect();
@@ -31,9 +62,27 @@ export default function Home() {
       : address ?? "";
 
   useEffect(() => {
-    // Placeholder for when we hook a live price feed.
-    setPrice((prev) => prev);
-  }, []);
+    const fetchPrice = async () => {
+      try {
+        const [sqrtPriceX96] = (await publicClient.readContract({
+          address: POOL_ADDRESS,
+          abi: poolAbi,
+          functionName: "slot0",
+        })) as [bigint, number];
+
+        const ratio = Number(sqrtPriceX96) / 2 ** 96;
+        const derivedPrice = ratio * ratio;
+        if (Number.isFinite(derivedPrice) && derivedPrice > 0) {
+          setPrice(derivedPrice);
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("Failed to fetch on-chain price", err);
+      }
+    };
+
+    fetchPrice();
+  }, [publicClient]);
 
   useEffect(() => {
     setSuccess("");
@@ -64,8 +113,9 @@ export default function Home() {
       amountUSDC: usdcNum,
       lowerTick: priceToTick(lowerPrice),
       upperTick: priceToTick(upperPrice),
-      poolAddress: undefined,
-      abi: undefined,
+      poolAddress: POOL_ADDRESS,
+      poolManager: POOL_MANAGER_ADDRESS,
+      abi: poolAbi,
     };
   };
 

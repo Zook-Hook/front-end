@@ -2,15 +2,37 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
+import type { Chain } from "viem";
 import { WagmiProvider, createConfig, http } from "wagmi";
-import { mainnet } from "wagmi/chains";
+
+export const worldchain: Chain = {
+  id: 480,
+  name: "Worldchain",
+  nativeCurrency: { name: "Worldcoin", symbol: "WLD", decimals: 18 },
+  rpcUrls: {
+    default: {
+      http: ["https://worldchain-mainnet.g.alchemy.com/public"],
+      webSocket: ["wss://worldchain.drpc.org"],
+    },
+    public: {
+      http: ["https://worldchain-mainnet.g.alchemy.com/public"],
+      webSocket: ["wss://worldchain.drpc.org"],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: "Blockscout",
+      url: "https://worldchain-mainnet.blockscout.com",
+    },
+  },
+};
 
 const queryClient = new QueryClient();
 
 const config = createConfig({
-  chains: [mainnet],
+  chains: [worldchain],
   transports: {
-    [mainnet.id]: http(),
+    [worldchain.id]: http(worldchain.rpcUrls.default.http[0]),
   },
 });
 
