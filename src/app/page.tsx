@@ -210,6 +210,11 @@ export default function Home() {
             <p className="text-sm text-white/70 mt-1">
               Concentrated liquidity with rehypothecation on idle capital.
             </p>
+            {onChainPrice !== null && (
+              <p className="text-sm text-zinc-400 mt-1">
+                On-chain price (WLD/USDC): {onChainPrice.toFixed(4)}
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {isConnected ? (
