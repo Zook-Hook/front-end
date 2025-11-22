@@ -22,13 +22,17 @@ export default function Home() {
   const canDeposit = wldNum > 0 && usdcNum > 0;
   const shortAddress =
     address && address.length > 8
-      ? `${address.slice(0, 6)}…${address.slice(address.length - 4)}`
+      ? `${address.slice(0, 6)}...${address.slice(address.length - 4)}`
       : address ?? "";
 
   useEffect(() => {
     // Placeholder for when we hook a live price feed.
     setPrice((prev) => prev);
   }, []);
+
+  useEffect(() => {
+    setSuccess("");
+  }, [amountWLD, amountUSDC, selectedRange]);
 
   const handleConnect = async () => {
     try {
@@ -109,7 +113,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
-      <div className="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-12">
+      <div className="mx-auto flex max-w-xl flex-col gap-8 px-6 py-12">
         <header className="flex items-start justify-between gap-4">
           <div className="space-y-2">
             <p className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-500">
@@ -118,6 +122,9 @@ export default function Home() {
             <h1 className="text-3xl font-semibold">WLD/USDC Liquidity Manager</h1>
             <p className="text-sm text-slate-600">
               Deposit liquidity into preset ranges. Rehypothecation keeps IL exposure identical.
+            </p>
+            <p className="text-sm text-white/70 mt-1">
+              Concentrated liquidity with rehypothecation on idle capital.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -129,7 +136,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={handleDisconnect}
-                  className="rounded-full border border-emerald-400/60 bg-zinc-900/60 px-3 py-1 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-500/20"
+                  className="rounded-full border border-emerald-500/30 bg-zinc-900/60 px-3 py-1 text-xs font-semibold text-emerald-200 transition-all hover:bg-emerald-500/20"
                 >
                   Disconnect
                 </button>
@@ -138,7 +145,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={handleConnect}
-                className="rounded-full border border-emerald-400/60 bg-zinc-900/60 px-3 py-1 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-500/20"
+                className="rounded-full border border-emerald-500/30 bg-zinc-900/60 px-3 py-1 text-xs font-semibold text-emerald-200 transition-all hover:bg-emerald-500/20"
               >
                 Connect Wallet
               </button>
@@ -159,7 +166,7 @@ export default function Home() {
                 <div
                   key={value}
                   onClick={() => setSelectedRange(value)}
-                  className={`flex-1 min-h-[120px] flex flex-col justify-between rounded-xl border p-6 shadow-sm transition cursor-pointer ${
+                  className={`flex-1 min-h-[120px] flex flex-col justify-between rounded-xl border p-6 shadow-lg shadow-black/20 transition-all hover:shadow-emerald-400/10 cursor-pointer ${
                     isSelected
                       ? "border-emerald-400 bg-emerald-500/10 ring-1 ring-emerald-400/40"
                       : "border-zinc-800 bg-zinc-900/60 hover:ring-1 hover:ring-emerald-400/40"
@@ -173,7 +180,11 @@ export default function Home() {
           </div>
 
           <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-sm">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div
+              className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${
+                isSubmitting ? "opacity-50 pointer-events-none" : ""
+              }`}
+            >
               {[
                 {
                   label: "WLD Amount",
@@ -195,7 +206,7 @@ export default function Home() {
                     type="number"
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
-                    className="w-full rounded-xl border border-zinc-700 bg-zinc-900/60 p-4 text-lg text-zinc-50 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    className="w-full rounded-xl border border-zinc-700 bg-zinc-900/60 p-4 text-lg text-zinc-50 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     placeholder="0.00"
                   />
                 </label>
@@ -216,7 +227,7 @@ export default function Home() {
                     : "bg-emerald-500 opacity-50 cursor-not-allowed"
                 }`}
               >
-                {isSubmitting ? "Submitting…" : "Deposit"}
+                {isSubmitting ? "Submitting..." : "Deposit"}
               </button>
               <p className="mt-2 text-xs text-zinc-500">
                 Idle liquidity is rehypothecated into the exact same range, keeping IL exposure
@@ -226,7 +237,7 @@ export default function Home() {
             <div className="mt-4 space-y-2">
               {error && <p className="text-sm text-rose-400">{error}</p>}
               {isSubmitting && (
-                <p className="text-sm text-zinc-400">Submitting transaction…</p>
+                <p className="text-sm text-zinc-400">Submitting transaction...</p>
               )}
               {success && <p className="text-sm text-emerald-400">{success}</p>}
             </div>
