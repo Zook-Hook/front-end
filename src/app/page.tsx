@@ -13,7 +13,7 @@ function priceToTick(p: number) {
 
 const POOL_ID = "0x132db01ffd6a7d8446666c5fa5689a9556a384bdaa6bf68aecce7949efba649c" as const;
 const POOL_MANAGER_ADDRESS = "0xb1860D529182ac3BC1F51Fa2ABd56662b7D13f33" as const;
-const STATE_VIEW = (process.env.NEXT_PUBLIC_STATE_VIEW || "").trim();
+const STATE_VIEW = "0x51d394718bc09297262e368c1a481217fdeb71eb" as const;
 
 const STATE_VIEW_ABI = [
   {
@@ -37,7 +37,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [price, setPrice] = useState(2.5); // default until fetched from pool
+  const [onChainPrice, setOnChainPrice] = useState(2.5); // default until fetched from StateView
   const [lastEdited, setLastEdited] = useState<"WLD" | "USDC">("WLD");
   const publicClient = useMemo(
     () =>
@@ -62,14 +62,8 @@ export default function Home() {
   useEffect(() => {
     const fetchPrice = async () => {
       try {
-        if (!STATE_VIEW || !isAddress(STATE_VIEW)) {
-          // eslint-disable-next-line no-console
-          console.warn("STATE_VIEW address not configured or invalid; skipping price fetch.");
-          return;
-        }
-
         const [sqrtPriceX96] = (await publicClient.readContract({
-          address: STATE_VIEW as `0x${string}`,
+          address: STATE_VIEW,
           abi: STATE_VIEW_ABI,
           functionName: "getSlot0",
           args: [POOL_ID],
@@ -78,11 +72,11 @@ export default function Home() {
         const ratio = Number(sqrtPriceX96) / 2 ** 96;
         const derivedPrice = ratio * ratio;
         if (Number.isFinite(derivedPrice) && derivedPrice > 0) {
-          setPrice(derivedPrice);
+          setOnChainPrice(derivedPrice);
         }
       } catch (err) {
         // eslint-disable-next-line no-console
-        console.error("Failed to fetch on-chain price from StateView", err);
+        console.error("StateView: error fetching slot0", err);
       }
     };
 
@@ -102,8 +96,8 @@ export default function Home() {
 
     const { lower, upper } = factors[range];
     return {
-      lowerPrice: price * lower,
-      upperPrice: price * upper,
+      lowerPrice: onChainPrice * lower,
+      upperPrice: onChainPrice * upper,
     };
   };
 
@@ -113,7 +107,7 @@ export default function Home() {
       rangeId: range,
       lowerPrice,
       upperPrice,
-      currentPrice: price,
+      currentPrice: onChainPrice,
       amountWLD: wldNum,
       amountUSDC: usdcNum,
       lowerTick: priceToTick(lowerPrice),
@@ -146,7 +140,7 @@ export default function Home() {
 
     const num = Number(value);
     if (Number.isFinite(num)) {
-      setAmountUSDC((num * price).toFixed(6));
+      setAmountUSDC((num * onChainPrice).toFixed(6));
     }
   };
 
@@ -162,8 +156,8 @@ export default function Home() {
     }
 
     const num = Number(value);
-    if (Number.isFinite(num) && price !== 0) {
-      setAmountWLD((num / price).toFixed(6));
+    if (Number.isFinite(num) && onChainPrice !== 0) {
+      setAmountWLD((num / onChainPrice).toFixed(6));
     }
   };
 
