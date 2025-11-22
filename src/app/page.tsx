@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createPublicClient, http } from "viem";
+import { createPublicClient, http, isAddress } from "viem";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { injected } from "wagmi/connectors";
 import { worldchain } from "./providers";
@@ -11,24 +11,22 @@ function priceToTick(p: number) {
   return Math.floor(Math.log(p) / Math.log(1.0001));
 }
 
-const POOL_ADDRESS = "0x132db01ffd6a7d8446666c5fa5689a9556a384bdaa6bf68aecce7949efba649c" as const;
+const POOL_ID = "0x132db01ffd6a7d8446666c5fa5689a9556a384bdaa6bf68aecce7949efba649c" as const;
 const POOL_MANAGER_ADDRESS = "0xb1860D529182ac3BC1F51Fa2ABd56662b7D13f33" as const;
+const STATE_VIEW = (process.env.NEXT_PUBLIC_STATE_VIEW || "").trim();
 
-const poolAbi = [
+const STATE_VIEW_ABI = [
   {
-    inputs: [],
-    name: "slot0",
-    outputs: [
-      { internalType: "uint160", name: "sqrtPriceX96", type: "uint160" },
-      { internalType: "int24", name: "tick", type: "int24" },
-      { internalType: "uint16", name: "observationIndex", type: "uint16" },
-      { internalType: "uint16", name: "observationCardinality", type: "uint16" },
-      { internalType: "uint16", name: "observationCardinalityNext", type: "uint16" },
-      { internalType: "uint8", name: "feeProtocol", type: "uint8" },
-      { internalType: "bool", name: "unlocked", type: "bool" },
-    ],
-    stateMutability: "view",
+    name: "getSlot0",
     type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "poolId", type: "bytes32" }],
+    outputs: [
+      { name: "sqrtPriceX96", type: "uint160" },
+      { name: "tick", type: "int24" },
+      { name: "protocolFee", type: "uint24" },
+      { name: "lpFee", type: "uint24" },
+    ],
   },
 ] as const;
 
@@ -64,11 +62,18 @@ export default function Home() {
   useEffect(() => {
     const fetchPrice = async () => {
       try {
+        if (!STATE_VIEW || !isAddress(STATE_VIEW)) {
+          // eslint-disable-next-line no-console
+          console.warn("STATE_VIEW address not configured or invalid; skipping price fetch.");
+          return;
+        }
+
         const [sqrtPriceX96] = (await publicClient.readContract({
-          address: POOL_ADDRESS,
-          abi: poolAbi,
-          functionName: "slot0",
-        })) as [bigint, number];
+          address: STATE_VIEW as `0x${string}`,
+          abi: STATE_VIEW_ABI,
+          functionName: "getSlot0",
+          args: [POOL_ID],
+        })) as [bigint, number, number, number];
 
         const ratio = Number(sqrtPriceX96) / 2 ** 96;
         const derivedPrice = ratio * ratio;
@@ -77,7 +82,7 @@ export default function Home() {
         }
       } catch (err) {
         // eslint-disable-next-line no-console
-        console.error("Failed to fetch on-chain price", err);
+        console.error("Failed to fetch on-chain price from StateView", err);
       }
     };
 
@@ -113,9 +118,9 @@ export default function Home() {
       amountUSDC: usdcNum,
       lowerTick: priceToTick(lowerPrice),
       upperTick: priceToTick(upperPrice),
-      poolAddress: POOL_ADDRESS,
+      poolId: POOL_ID,
       poolManager: POOL_MANAGER_ADDRESS,
-      abi: poolAbi,
+      stateView: STATE_VIEW || undefined,
     };
   };
 
