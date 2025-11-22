@@ -1,9 +1,28 @@
- "use client";
+"use client";
 
 import { useState } from "react";
 
 export default function Home() {
   const [selectedRange, setSelectedRange] = useState<"A" | "B" | "C">("B");
+  const [amountWLD, setAmountWLD] = useState("");
+  const [amountUSDC, setAmountUSDC] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const wldNum = Number(amountWLD);
+  const usdcNum = Number(amountUSDC);
+  const canDeposit = wldNum > 0 && usdcNum > 0;
+
+  const handleDeposit = () => {
+    if (!canDeposit) {
+      setError("Enter both WLD and USDC amounts.");
+      setSuccess("");
+      return;
+    }
+
+    setError("");
+    setSuccess(`Deposit submitted (demo). Range ${selectedRange} selected.`);
+  };
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
@@ -47,14 +66,34 @@ export default function Home() {
           <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-sm">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {[
-                { label: "WLD Amount", name: "wld-amount" },
-                { label: "USDC Amount", name: "usdc-amount" },
-              ].map(({ label, name }) => (
+                {
+                  label: "WLD Amount",
+                  name: "wld-amount",
+                  value: amountWLD,
+                  onChange: (value: string) => {
+                    setAmountWLD(value);
+                    setError("");
+                    setSuccess("");
+                  },
+                },
+                {
+                  label: "USDC Amount",
+                  name: "usdc-amount",
+                  value: amountUSDC,
+                  onChange: (value: string) => {
+                    setAmountUSDC(value);
+                    setError("");
+                    setSuccess("");
+                  },
+                },
+              ].map(({ label, name, value, onChange }) => (
                 <label key={name} className="flex flex-col gap-2">
                   <span className="text-sm font-medium text-zinc-200">{label}</span>
                   <input
                     name={name}
                     type="number"
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
                     className="w-full rounded-xl border border-zinc-700 bg-zinc-900/60 p-4 text-lg text-zinc-50 focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     placeholder="0.00"
                   />
@@ -64,10 +103,20 @@ export default function Home() {
             <div className="mt-6">
               <button
                 type="button"
-                className="w-full rounded-xl bg-emerald-500 py-3 text-black font-semibold transition hover:bg-emerald-600"
+                onClick={handleDeposit}
+                disabled={!canDeposit}
+                className={`w-full rounded-xl py-3 text-black font-semibold transition ${
+                  canDeposit
+                    ? "bg-emerald-500 hover:bg-emerald-600"
+                    : "bg-emerald-500 opacity-50 cursor-not-allowed"
+                }`}
               >
                 Deposit
               </button>
+            </div>
+            <div className="mt-4 space-y-2">
+              {error && <p className="text-sm text-rose-400">{error}</p>}
+              {success && <p className="text-sm text-emerald-400">{success}</p>}
             </div>
           </div>
 
