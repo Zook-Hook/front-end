@@ -8,6 +8,7 @@ export default function Home() {
   const [amountUSDC, setAmountUSDC] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const wldNum = Number(amountWLD);
   const usdcNum = Number(amountUSDC);
@@ -20,8 +21,17 @@ export default function Home() {
       return;
     }
 
+    setIsSubmitting(true);
     setError("");
-    setSuccess(`Deposit submitted (demo). Range ${selectedRange} selected.`);
+    setSuccess("");
+
+    // Simulate async submission
+    setTimeout(() => {
+      setIsSubmitting(false);
+      setSuccess(
+        `Deposit submitted (demo). Range ${selectedRange} selected. Tx: 0x9f3a...c21b`
+      );
+    }, 1500);
   };
 
   return (
@@ -104,18 +114,25 @@ export default function Home() {
               <button
                 type="button"
                 onClick={handleDeposit}
-                disabled={!canDeposit}
+                disabled={!canDeposit || isSubmitting}
                 className={`w-full rounded-xl py-3 text-black font-semibold transition ${
-                  canDeposit
+                  canDeposit && !isSubmitting
                     ? "bg-emerald-500 hover:bg-emerald-600"
                     : "bg-emerald-500 opacity-50 cursor-not-allowed"
                 }`}
               >
-                Deposit
+                {isSubmitting ? "Submitting…" : "Deposit"}
               </button>
+              <p className="mt-2 text-xs text-zinc-500">
+                Idle liquidity is rehypothecated into the exact same range, keeping IL exposure
+                identical.
+              </p>
             </div>
             <div className="mt-4 space-y-2">
               {error && <p className="text-sm text-rose-400">{error}</p>}
+              {isSubmitting && (
+                <p className="text-sm text-zinc-400">Submitting transaction…</p>
+              )}
               {success && <p className="text-sm text-emerald-400">{success}</p>}
             </div>
           </div>
