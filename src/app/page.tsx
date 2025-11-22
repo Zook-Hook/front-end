@@ -4,6 +4,11 @@ import { useEffect, useState } from "react";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { injected } from "wagmi/connectors";
 
+function priceToTick(p: number) {
+  // placeholder v3 conversion
+  return Math.floor(Math.log(p) / Math.log(1.0001));
+}
+
 export default function Home() {
   const [selectedRange, setSelectedRange] = useState<"A" | "B" | "C">("B");
   const [amountWLD, setAmountWLD] = useState("");
@@ -33,6 +38,36 @@ export default function Home() {
   useEffect(() => {
     setSuccess("");
   }, [amountWLD, amountUSDC, selectedRange]);
+
+  const computeRange = (range: "A" | "B" | "C") => {
+    const factors = {
+      A: { lower: 0.98, upper: 1.02 },
+      B: { lower: 0.9, upper: 1.1 },
+      C: { lower: 0.7, upper: 1.3 },
+    } as const;
+
+    const { lower, upper } = factors[range];
+    return {
+      lowerPrice: price * lower,
+      upperPrice: price * upper,
+    };
+  };
+
+  const prepareDeposit = (range: "A" | "B" | "C") => {
+    const { lowerPrice, upperPrice } = computeRange(range);
+    return {
+      rangeId: range,
+      lowerPrice,
+      upperPrice,
+      currentPrice: price,
+      amountWLD: wldNum,
+      amountUSDC: usdcNum,
+      lowerTick: priceToTick(lowerPrice),
+      upperTick: priceToTick(upperPrice),
+      poolAddress: undefined,
+      abi: undefined,
+    };
+  };
 
   const handleConnect = async () => {
     try {
@@ -161,6 +196,7 @@ export default function Home() {
               { value: "C" as const, label: "Range C", description: "Wider range" },
             ].map(({ value, label, description }) => {
               const isSelected = selectedRange === value;
+              const { lowerPrice, upperPrice } = computeRange(value);
 
               return (
                 <div
@@ -174,6 +210,14 @@ export default function Home() {
                 >
                   <p className="text-sm font-semibold text-zinc-50">{label}</p>
                   <p className="text-xs text-zinc-400">{description}</p>
+                  <div className="mt-3 space-y-1 text-[11px] text-zinc-400">
+                    <p>
+                      Lower: <span className="text-zinc-200">{lowerPrice.toFixed(4)}</span>
+                    </p>
+                    <p>
+                      Upper: <span className="text-zinc-200">{upperPrice.toFixed(4)}</span>
+                    </p>
+                  </div>
                 </div>
               );
             })}
@@ -228,6 +272,17 @@ export default function Home() {
                 }`}
               >
                 {isSubmitting ? "Submitting..." : "Deposit"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  // Debug-only: preview prepared deposit payload.
+                  // eslint-disable-next-line no-console
+                  console.log(prepareDeposit(selectedRange));
+                }}
+                className="mt-2 w-full rounded-xl border border-zinc-800 bg-zinc-900/80 py-2 text-xs font-semibold text-zinc-200 transition hover:bg-zinc-800"
+              >
+                Prepare Deposit (Debug)
               </button>
               <p className="mt-2 text-xs text-zinc-500">
                 Idle liquidity is rehypothecated into the exact same range, keeping IL exposure
