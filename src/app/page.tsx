@@ -13,7 +13,21 @@ export default function Home() {
         </header>
 
         <div className="flex flex-col gap-4">
-          <div className="h-32 rounded-lg border border-slate-200 bg-white shadow-sm" />
+          <div className="flex gap-4">
+            {[
+              { label: "Range A", description: "Tighter range" },
+              { label: "Range B", description: "Balanced" },
+              { label: "Range C", description: "Wider range" },
+            ].map(({ label, description }) => (
+              <div
+                key={label}
+                className="flex-1 min-h-[120px] flex flex-col justify-between rounded-xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-sm transition hover:ring-1 hover:ring-emerald-400/40 cursor-pointer"
+              >
+                <p className="text-sm font-semibold text-zinc-50">{label}</p>
+                <p className="text-xs text-zinc-400">{description}</p>
+              </div>
+            ))}
+          </div>
           <div className="h-40 rounded-lg border border-slate-200 bg-white shadow-sm" />
           <div className="h-14 rounded-lg border border-slate-200 bg-white shadow-sm" />
         </div>
