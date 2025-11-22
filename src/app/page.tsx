@@ -43,7 +43,34 @@ export default function Home() {
               );
             })}
           </div>
-          <div className="h-40 rounded-lg border border-slate-200 bg-white shadow-sm" />
+
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-sm">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {[
+                { label: "WLD Amount", name: "wld-amount" },
+                { label: "USDC Amount", name: "usdc-amount" },
+              ].map(({ label, name }) => (
+                <label key={name} className="flex flex-col gap-2">
+                  <span className="text-sm font-medium text-zinc-200">{label}</span>
+                  <input
+                    name={name}
+                    type="number"
+                    className="w-full rounded-xl border border-zinc-700 bg-zinc-900/60 p-4 text-lg text-zinc-50 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    placeholder="0.00"
+                  />
+                </label>
+              ))}
+            </div>
+            <div className="mt-6">
+              <button
+                type="button"
+                className="w-full rounded-xl bg-emerald-500 py-3 text-black font-semibold transition hover:bg-emerald-600"
+              >
+                Deposit
+              </button>
+            </div>
+          </div>
+
           <div className="h-14 rounded-lg border border-slate-200 bg-white shadow-sm" />
         </div>
       </div>
