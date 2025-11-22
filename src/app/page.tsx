@@ -1,19 +1,54 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createPublicClient, http, isAddress } from "viem";
+import { createPublicClient, http, isAddress, parseUnits } from "viem";
+import { TickMath, nearestUsableTick, maxLiquidityForAmounts } from "@uniswap/v3-sdk";
+import JSBI from "jsbi";
+import { Pool, V4PositionPlanner } from "@uniswap/v4-sdk";
+import { Token } from "@uniswap/sdk-core";
+import { useWriteContract } from "wagmi";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { injected } from "wagmi/connectors";
 import { worldchain } from "./providers";
 
-function priceToTick(p: number) {
-  // placeholder v3 conversion
-  return Math.floor(Math.log(p) / Math.log(1.0001));
-}
-
 const POOL_ID = "0x132db01ffd6a7d8446666c5fa5689a9556a384bdaa6bf68aecce7949efba649c" as const;
 const POOL_MANAGER_ADDRESS = "0xb1860D529182ac3BC1F51Fa2ABd56662b7D13f33" as const;
 const STATE_VIEW = "0x51d394718bc09297262e368c1a481217fdeb71eb" as const;
+const TICK_SPACING = 28;
+const LOG_BASE = Math.log(1.0001);
+const DECIMALS0 = 18; // WLD
+const DECIMALS1 = 6; // USDC.e
+const POSITION_MANAGER = "0xc585E0F504613b5FBf874F21aF14c65260Fb41fA" as const;
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
+
+const WLD = new Token(480, "0x2cFc85d8E48F8EAB294be644d9E25C3030863003", DECIMALS0, "WLD");
+const USDC = new Token(480, "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1", DECIMALS1, "USDC.e");
+
+const ERC20_ABI = [
+  {
+    type: "function",
+    name: "approve",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+] as const;
+
+export const POSITION_MANAGER_ABI = [
+  {
+    type: "function",
+    name: "modifyLiquidities",
+    stateMutability: "payable",
+    inputs: [
+      { name: "unlockData", type: "bytes" },
+      { name: "deadline", type: "uint256" },
+    ],
+    outputs: [],
+  },
+] as const;
 
 const STATE_VIEW_ABI = [
   {
@@ -37,7 +72,10 @@ export default function Home() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [txHash, setTxHash] = useState<string | null>(null);
   const [onChainPrice, setOnChainPrice] = useState(2.5); // default until fetched from StateView
+  const [onChainTick, setOnChainTick] = useState<number | null>(null);
+  const [sqrtPriceX96, setSqrtPriceX96] = useState<bigint | null>(null);
   const [lastEdited, setLastEdited] = useState<"WLD" | "USDC">("WLD");
   const publicClient = useMemo(
     () =>
@@ -50,6 +88,7 @@ export default function Home() {
   const { address, isConnected } = useAccount();
   const { connectAsync } = useConnect();
   const { disconnectAsync } = useDisconnect();
+  const { writeContractAsync } = useWriteContract();
 
   const wldNum = Number(amountWLD);
   const usdcNum = Number(amountUSDC);
@@ -62,17 +101,22 @@ export default function Home() {
   useEffect(() => {
     const fetchPrice = async () => {
       try {
-        const [sqrtPriceX96] = (await publicClient.readContract({
+        const [sqrtPriceX96Value, tick] = (await publicClient.readContract({
           address: STATE_VIEW,
           abi: STATE_VIEW_ABI,
           functionName: "getSlot0",
           args: [POOL_ID],
         })) as [bigint, number, number, number];
 
-        const ratio = Number(sqrtPriceX96) / 2 ** 96;
+        const ratio = Number(sqrtPriceX96Value) / 2 ** 96;
         const derivedPrice = ratio * ratio;
-        if (Number.isFinite(derivedPrice) && derivedPrice > 0) {
-          setOnChainPrice(derivedPrice);
+        // token0 = WLD (18 decimals), token1 = USDC.e (6 decimals)
+        const adjustedPrice = derivedPrice * 10 ** (DECIMALS0 - DECIMALS1);
+
+        if (Number.isFinite(adjustedPrice) && adjustedPrice > 0) {
+          setOnChainPrice(adjustedPrice);
+          setOnChainTick(tick);
+          setSqrtPriceX96(sqrtPriceX96Value);
         }
       } catch (err) {
         // eslint-disable-next-line no-console
@@ -95,9 +139,25 @@ export default function Home() {
     } as const;
 
     const { lower, upper } = factors[range];
+    const baseTick =
+      onChainTick ??
+      (sqrtPriceX96 ? TickMath.getTickAtSqrtRatio(sqrtPriceX96) : TickMath.MIN_TICK);
+
+    const rawLowerTick = Math.floor(baseTick + Math.log(lower) / LOG_BASE);
+    const rawUpperTick = Math.floor(baseTick + Math.log(upper) / LOG_BASE);
+    const tickLower = nearestUsableTick(rawLowerTick, TICK_SPACING);
+    const tickUpper = nearestUsableTick(rawUpperTick, TICK_SPACING);
+
+    const sqrtLower = TickMath.getSqrtRatioAtTick(tickLower);
+    const sqrtUpper = TickMath.getSqrtRatioAtTick(tickUpper);
+    const priceFromSqrt = (sqrt: bigint) =>
+      (Number(sqrt) / 2 ** 96) ** 2 * 10 ** (DECIMALS0 - DECIMALS1);
+
     return {
-      lowerPrice: onChainPrice * lower,
-      upperPrice: onChainPrice * upper,
+      lowerPrice: priceFromSqrt(sqrtLower),
+      upperPrice: priceFromSqrt(sqrtUpper),
+      tickLower,
+      tickUpper,
     };
   };
 
@@ -110,8 +170,8 @@ export default function Home() {
       currentPrice: onChainPrice,
       amountWLD: wldNum,
       amountUSDC: usdcNum,
-      lowerTick: priceToTick(lowerPrice),
-      upperTick: priceToTick(upperPrice),
+      lowerTick: rangeTicks.tickLower,
+      upperTick: rangeTicks.tickUpper,
       poolId: POOL_ID,
       poolManager: POOL_MANAGER_ADDRESS,
       stateView: STATE_VIEW || undefined,
@@ -169,7 +229,7 @@ export default function Home() {
     }
   };
 
-  const handleDeposit = () => {
+  const handleDeposit = async () => {
     if (!canDeposit) {
       setError("Enter both WLD and USDC amounts.");
       setSuccess("");
@@ -182,17 +242,101 @@ export default function Home() {
       return;
     }
 
+    if (!sqrtPriceX96 || onChainTick === null) {
+      setError("On-chain price not ready. Try again in a moment.");
+      return;
+    }
+
     setIsSubmitting(true);
     setError("");
     setSuccess("");
+    setTxHash(null);
 
-    // Simulate async submission
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setSuccess(
-        `Deposit submitted (demo). Range ${selectedRange} selected. Tx: 0x9f3a...c21b`
+    try {
+      const slippageBps = 50; // 0.5%
+      const amount0 = parseUnits(amountWLD || "0", DECIMALS0);
+      const amount1 = parseUnits(amountUSDC || "0", DECIMALS1);
+      const amount0Max = (amount0 * BigInt(10000 + slippageBps)) / BigInt(10000);
+      const amount1Max = (amount1 * BigInt(10000 + slippageBps)) / BigInt(10000);
+
+      const baseTick = TickMath.getTickAtSqrtRatio(sqrtPriceX96);
+      const currentTickUsable = nearestUsableTick(baseTick, TICK_SPACING);
+      const { tickLower, tickUpper } = computeRange(selectedRange);
+      const sqrtLower = TickMath.getSqrtRatioAtTick(tickLower);
+      const sqrtUpper = TickMath.getSqrtRatioAtTick(tickUpper);
+
+      const liquidity = maxLiquidityForAmounts(
+        JSBI.BigInt(sqrtPriceX96),
+        JSBI.BigInt(sqrtLower),
+        JSBI.BigInt(sqrtUpper),
+        JSBI.BigInt(amount0),
+        JSBI.BigInt(amount1),
+        true
       );
-    }, 1500);
+
+      const pool = new Pool(
+        WLD,
+        USDC,
+        1400,
+        TICK_SPACING,
+        ZERO_ADDRESS,
+        sqrtPriceX96,
+        JSBI.BigInt(0),
+        currentTickUsable
+      );
+
+      const planner = new V4PositionPlanner();
+      planner.addMint(
+        pool,
+        tickLower,
+        tickUpper,
+        liquidity,
+        amount0Max,
+        amount1Max,
+        address as string,
+        "0x"
+      );
+      planner.addSettlePair(WLD, USDC);
+      planner.addSweep(WLD, address as string);
+      planner.addSweep(USDC, address as string);
+
+      const unlockData = planner.finalize();
+      const deadline = Math.floor(Date.now() / 1000) + 600;
+
+      // Approvals
+      await writeContractAsync({
+        address: WLD.address as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: "approve",
+        args: [POSITION_MANAGER, amount0Max],
+      });
+
+      await writeContractAsync({
+        address: USDC.address as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: "approve",
+        args: [POSITION_MANAGER, amount1Max],
+      });
+
+      const hash = await writeContractAsync({
+        address: POSITION_MANAGER,
+        abi: POSITION_MANAGER_ABI,
+        functionName: "modifyLiquidities",
+        args: [unlockData as `0x${string}`, BigInt(deadline)],
+      });
+
+      setTxHash(hash);
+
+      setSuccess(
+        `Deposit submitted. Tx: ${hash.slice(0, 8)}...${hash.slice(-6)} (Range ${selectedRange})`
+      );
+    } catch (err: any) {
+      // eslint-disable-next-line no-console
+      console.error("Deposit failed", err);
+      setError(err?.shortMessage || err?.message || "Deposit failed");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
