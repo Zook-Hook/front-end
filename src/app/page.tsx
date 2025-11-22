@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useAccount, useConnect, useDisconnect } from "wagmi";
+import { injected } from "wagmi/connectors";
 
 export default function Home() {
   const [selectedRange, setSelectedRange] = useState<"A" | "B" | "C">("B");
@@ -9,14 +11,44 @@ export default function Home() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { address, isConnected } = useAccount();
+  const { connectAsync } = useConnect();
+  const { disconnectAsync } = useDisconnect();
 
   const wldNum = Number(amountWLD);
   const usdcNum = Number(amountUSDC);
   const canDeposit = wldNum > 0 && usdcNum > 0;
+  const shortAddress =
+    address && address.length > 8
+      ? `${address.slice(0, 6)}…${address.slice(address.length - 4)}`
+      : address ?? "";
+
+  const handleConnect = async () => {
+    try {
+      await connectAsync({ connector: injected() });
+      setError("");
+    } catch (err) {
+      setError("Failed to connect wallet.");
+    }
+  };
+
+  const handleDisconnect = async () => {
+    try {
+      await disconnectAsync();
+    } catch (err) {
+      setError("Failed to disconnect wallet.");
+    }
+  };
 
   const handleDeposit = () => {
     if (!canDeposit) {
       setError("Enter both WLD and USDC amounts.");
+      setSuccess("");
+      return;
+    }
+
+    if (!isConnected) {
+      setError("Connect wallet to deposit.");
       setSuccess("");
       return;
     }
@@ -37,14 +69,40 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
       <div className="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-12">
-        <header className="space-y-2">
-          <p className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-500">
-            Zook Liquidity
-          </p>
-          <h1 className="text-3xl font-semibold">WLD/USDC Liquidity Manager</h1>
-          <p className="text-sm text-slate-600">
-            Deposit liquidity into preset ranges. Rehypothecation keeps IL exposure identical.
-          </p>
+        <header className="flex items-start justify-between gap-4">
+          <div className="space-y-2">
+            <p className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-500">
+              Zook Liquidity
+            </p>
+            <h1 className="text-3xl font-semibold">WLD/USDC Liquidity Manager</h1>
+            <p className="text-sm text-slate-600">
+              Deposit liquidity into preset ranges. Rehypothecation keeps IL exposure identical.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {isConnected ? (
+              <>
+                <span className="rounded-full bg-zinc-900/70 px-3 py-1 text-xs font-medium text-emerald-200">
+                  {shortAddress}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleDisconnect}
+                  className="rounded-full border border-emerald-400/60 bg-zinc-900/60 px-3 py-1 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-500/20"
+                >
+                  Disconnect
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={handleConnect}
+                className="rounded-full border border-emerald-400/60 bg-zinc-900/60 px-3 py-1 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-500/20"
+              >
+                Connect Wallet
+              </button>
+            )}
+          </div>
         </header>
 
         <div className="flex flex-col gap-4">
@@ -114,9 +172,9 @@ export default function Home() {
               <button
                 type="button"
                 onClick={handleDeposit}
-                disabled={!canDeposit || isSubmitting}
+                disabled={!canDeposit || isSubmitting || !isConnected}
                 className={`w-full rounded-xl py-3 text-black font-semibold transition ${
-                  canDeposit && !isSubmitting
+                  canDeposit && !isSubmitting && isConnected
                     ? "bg-emerald-500 hover:bg-emerald-600"
                     : "bg-emerald-500 opacity-50 cursor-not-allowed"
                 }`}
