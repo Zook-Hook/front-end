@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { injected } from "wagmi/connectors";
 
@@ -11,6 +11,8 @@ export default function Home() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [price, setPrice] = useState(2.5); // 1 WLD = 2.5 USDC (mock)
+  const [lastEdited, setLastEdited] = useState<"WLD" | "USDC">("WLD");
   const { address, isConnected } = useAccount();
   const { connectAsync } = useConnect();
   const { disconnectAsync } = useDisconnect();
@@ -23,12 +25,51 @@ export default function Home() {
       ? `${address.slice(0, 6)}…${address.slice(address.length - 4)}`
       : address ?? "";
 
+  useEffect(() => {
+    // Placeholder for when we hook a live price feed.
+    setPrice((prev) => prev);
+  }, []);
+
   const handleConnect = async () => {
     try {
       await connectAsync({ connector: injected() });
       setError("");
     } catch (err) {
       setError("Failed to connect wallet.");
+    }
+  };
+
+  const handleWLDChange = (value: string) => {
+    setAmountWLD(value);
+    setLastEdited("WLD");
+    setError("");
+    setSuccess("");
+
+    if (!value) {
+      setAmountUSDC("");
+      return;
+    }
+
+    const num = Number(value);
+    if (Number.isFinite(num)) {
+      setAmountUSDC((num * price).toFixed(6));
+    }
+  };
+
+  const handleUSDCChange = (value: string) => {
+    setAmountUSDC(value);
+    setLastEdited("USDC");
+    setError("");
+    setSuccess("");
+
+    if (!value) {
+      setAmountWLD("");
+      return;
+    }
+
+    const num = Number(value);
+    if (Number.isFinite(num) && price !== 0) {
+      setAmountWLD((num / price).toFixed(6));
     }
   };
 
@@ -138,21 +179,13 @@ export default function Home() {
                   label: "WLD Amount",
                   name: "wld-amount",
                   value: amountWLD,
-                  onChange: (value: string) => {
-                    setAmountWLD(value);
-                    setError("");
-                    setSuccess("");
-                  },
+                  onChange: handleWLDChange,
                 },
                 {
                   label: "USDC Amount",
                   name: "usdc-amount",
                   value: amountUSDC,
-                  onChange: (value: string) => {
-                    setAmountUSDC(value);
-                    setError("");
-                    setSuccess("");
-                  },
+                  onChange: handleUSDCChange,
                 },
               ].map(({ label, name, value, onChange }) => (
                 <label key={name} className="flex flex-col gap-2">
@@ -168,6 +201,10 @@ export default function Home() {
                 </label>
               ))}
             </div>
+            <p className="mt-3 text-xs text-zinc-500">
+              Estimated using current price. Final amounts depend on selected range. Last edited:
+              {` ${lastEdited}`}.
+            </p>
             <div className="mt-6">
               <button
                 type="button"
